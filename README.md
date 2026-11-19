@@ -41,7 +41,7 @@ Tether fixes both. Plug in the cable, and the iPad is your screen. Close the lid
 | **The cable is the switch** | Tether watches USB. When an iPad shows up, it turns on Sidecar and forces it over the cable. If the iPad is locked, it keeps trying until you unlock it. |
 | **The menu bar moves** | The iPad becomes the main display, so the Dock and new windows open there, not on the broken screen. |
 | **Close the lid** | A Mac sleeps when you close the lid unless a monitor is plugged in, and macOS doesn't count an iPad as one. Tether keeps the Mac awake while the cable is in. |
-| **You can find the pointer** | Sidecar hides the Mac's pointer while you use the iPad by touch. Tether draws a mint ring around it and makes it twice as big, then puts it back when you unplug. |
+| **You can see the pointer** | Sidecar hides the Mac's pointer on the iPad. Tether draws the Mac's own pointer there (arrow, I-beam, hand) at your usual size, only while it's on the iPad. |
 | **Unplug, and it's a normal Mac** | Sleep comes back when you unplug, when you quit, and on the next launch if Tether ever crashes. It won't overheat in your bag. |
 
 It lives in the menu bar. There's no window, no Dock icon and no settings screen, and it opens at login.
@@ -120,7 +120,7 @@ cd tether
 - [`Sources/Sidecar.swift`](Sources/Sidecar.swift): connects and disconnects through `SidecarCore`.
 - [`Sources/USBWatcher.swift`](Sources/USBWatcher.swift): IOKit notifications for an iPad on USB.
 - [`Sources/System.swift`](Sources/System.swift): the lid-closed switch (`pmset`) and moving the main display.
-- [`Sources/Halo.swift`](Sources/Halo.swift): the ring that keeps the pointer visible on the iPad.
+- [`Sources/PadPointer.swift`](Sources/PadPointer.swift): draws the Mac's pointer on the iPad, which Sidecar hides.
 - [`Sources/Log.swift`](Sources/Log.swift): the log at `~/Library/Logs/Tether.log`.
 - [`docs/`](docs): the website, served by GitHub Pages.
 - [`scripts/`](scripts): `build.sh` and `make-icon.swift`.

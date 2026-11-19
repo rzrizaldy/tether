@@ -77,7 +77,7 @@ enum Displays {
 
 /// The pointer size, through SkyLight's private SLSGetCursorScale /
 /// SLSSetCursorScale (what Accessibility's "Pointer size" slider changes).
-/// Sidecar draws the Mac's own pointer, so this makes it readable on an iPad.
+/// Read so the iPad pointer matches your size; set only to undo 1.2 builds.
 enum Cursor {
     private typealias Conn = @convention(c) () -> Int32
     private typealias Get = @convention(c) (Int32, UnsafeMutablePointer<Float>) -> Int32

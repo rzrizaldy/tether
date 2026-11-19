@@ -14,7 +14,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let sidecar = Sidecar()
     private let usb = USBWatcher()
-    private let halo = Halo()
+    private let pointer = PadPointer()
     private let defaults = UserDefaults.standard
     private var item: NSStatusItem!
     private var timer: Timer?
@@ -35,7 +35,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var lidClosed: Bool { get { defaults.bool(forKey: "lidClosed") } set { defaults.set(newValue, forKey: "lidClosed") } }
     private var makeMain: Bool { get { defaults.bool(forKey: "makeMain") } set { defaults.set(newValue, forKey: "makeMain") } }
     private var bigCursor: Bool { get { defaults.bool(forKey: "bigCursor") } set { defaults.set(newValue, forKey: "bigCursor") } }
-    /// The cursor size from before Tether enlarged it; 0 when it isn't enlarged.
+    /// Set by 1.2 builds that enlarged the pointer; put back on launch.
     private var savedCursor: Float { get { defaults.float(forKey: "savedCursor") } set { defaults.set(newValue, forKey: "savedCursor") } }
     /// Persisted so a crash never leaves the Mac unable to sleep in your bag.
     private var awakeHeld: Bool { get { defaults.bool(forKey: "awakeHeld") } set { defaults.set(newValue, forKey: "awakeHeld") } }
@@ -46,6 +46,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         defaults.register(defaults: ["autoConnect": true, "lidClosed": true, "makeMain": true, "bigCursor": true])
 
         if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
+        if savedCursor > 0 { Cursor.scale = savedCursor; savedCursor = 0 }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         Log.write("Tether \(version) started on macOS \(ProcessInfo.processInfo.operatingSystemVersionString). Sidecar \(sidecar.isAvailable ? "found" : "MISSING"), lid-closed \(Power.isSetUp ? "set up" : "not set up")")
 
@@ -68,7 +69,10 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated { self?.evaluate() }
         }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.placeMenuBarOnPad() }
+            MainActor.assumeIsolated {
+                self?.placeMenuBarOnPad()
+                self?.pointer.screenFrame = self?.padScreenFrame()
+            }
         }
         timer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.evaluate() }
@@ -78,7 +82,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ note: Notification) {
         if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
-        if savedCursor > 0 { Cursor.scale = savedCursor; savedCursor = 0 }
+        pointer.hide()
     }
 
     // MARK: the whole brain
@@ -100,16 +104,13 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         wasConnected = connected
 
-        // Bigger pointer and a ring around it while the iPad is the screen;
-        // Sidecar hides the real pointer during touch, the ring stays visible.
-        let wantBig = bigCursor && connected
-        if wantBig && !halo.isOn { halo.show() } else if !wantBig && halo.isOn { halo.hide() }
-        if wantBig && savedCursor == 0, let now = Cursor.scale {
-            savedCursor = max(now, 1)
-            Cursor.scale = max(now, 2)
-        } else if !wantBig && savedCursor > 0 {
-            Cursor.scale = savedCursor
-            savedCursor = 0
+        // Sidecar hides the Mac's pointer on the iPad; draw it ourselves.
+        let wantPointer = bigCursor && connected
+        if wantPointer {
+            pointer.screenFrame = padScreenFrame()
+            if !pointer.isOn { pointer.show() }
+        } else if pointer.isOn {
+            pointer.hide()
         }
 
         // Cable in + iPad has been the screen → survive the lid closing.
@@ -162,6 +163,14 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         userDisconnected = true
         for d in sidecar.connected { sidecar.disconnect(d) { [weak self] _ in self?.evaluate() } }
         evaluate()
+    }
+
+    private func padScreenFrame() -> NSRect? {
+        guard let device = sidecar.connected.first,
+              let id = Displays.sidecarDisplay(named: Sidecar.name(device)) else { return nil }
+        return NSScreen.screens.first {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == id
+        }?.frame
     }
 
     private func placeMenuBarOnPad() {
