@@ -18,7 +18,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@144,750,100&text=Tether&display=swap">
-<link rel="stylesheet" href="site.css?v=1">
+<link rel="stylesheet" href="site.css?v=2">
 </head>
 <body>
 
@@ -26,6 +26,7 @@
   <a class="brand" href="#top" aria-label="Tether"><span class="logo" aria-hidden="true"><span class="ch">T</span><span class="ch">e</span><span class="ch">t</span><span class="ch">h</span><span class="ch">e</span><span class="ch">r</span><span class="led-mark" aria-hidden="true"></span></span></a>
   <nav aria-label="Sections">
     <a href="#how">How</a>
+    <a href="#sill">No cable</a>
     <a href="#lid">Lid closed</a>
     <a href="#menu">Menu</a>
     <a href="#open">Open source</a>
@@ -99,18 +100,45 @@
     </div>
   </section>
 
+  <section class="slide" id="sill" data-title="Without the cable">
+    <div class="wrap center">
+      <p class="eyebrow r">Without the cable</p>
+      <h2 class="r">No cable?<br><span class="grad">Sill takes over.</span></h2>
+      <p class="lede r">On the couch or across town, Tether hands the screen to <a class="more" href="https://getsill.app">Sill</a>, a free, open-source app that streams your Mac to the iPad. Plug the cable back in and Sidecar takes over again.</p>
+      <div class="tiles three left">
+        <div class="tile r">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M12 6v6M3 12h18"/></svg></div>
+          <h3>Your trackpad works</h3>
+          <p>Sill passes the Magic Keyboard's trackpad, keys and Pencil through to the Mac. Sidecar only passes the keys.</p>
+        </div>
+        <div class="tile r">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M9 20h6M12 16v4"/><path d="M8 9h3M8 12h6"/></svg></div>
+          <h3>A screen that fits</h3>
+          <p>Tether makes an iPad-sized Retina screen, so the Mac has a proper desktop to stream with the lid shut and the real one broken.</p>
+        </div>
+        <div class="tile r">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg></div>
+          <h3>From anywhere</h3>
+          <p>With Tailscale, reach the Mac you left at home. Tether keeps it awake while it's on a charger, and only then.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="slide night" id="lid" data-title="Lid closed">
     <div class="wrap split">
       <div>
-        <p class="eyebrow r">Lid closed</p>
-        <h2 class="r">Close the lid.<br><span class="dim">Keep working.</span></h2>
-        <p class="body r">A Mac sleeps when you close the lid unless a monitor is plugged in, and an iPad doesn't count. Tether keeps it awake <strong>only while the cable is in</strong>. Unplug, and it sleeps like it always has, so it won't cook in your bag.</p>
+        <p class="eyebrow r">Lid closed, bag safe</p>
+        <h2 class="r">Close the lid.<br><span class="dim">Put it in a bag.</span></h2>
+        <p class="body r">A Mac sleeps when you close the lid unless a monitor is plugged in, and an iPad doesn't count. Tether keeps it awake <strong>only while you're using it</strong>. Everything else lets it sleep, even with the cable still in, so it won't cook in your bag. It also never switches off Amphetamine's keep-awake.</p>
       </div>
       <div class="rules r">
-        <div class="rule">Cable in, iPad showing<span class="pill awake">Stays awake</span></div>
-        <div class="rule">Cable out<span class="pill">Sleeps</span></div>
-        <div class="rule">You quit Tether<span class="pill">Sleeps</span></div>
-        <div class="rule">Tether crashes<span class="pill">Fixed at next launch</span></div>
+        <div class="rule on">Cable in, Sidecar on<span class="pill awake">Stays awake</span></div>
+        <div class="rule on">No cable, Sill, on a charger<span class="pill awake">Stays awake</span></div>
+        <div class="rule">No cable, no charger<span class="pill">Sleeps</span></div>
+        <div class="rule">iPad screen off for 90 s<span class="pill">Sleeps</span></div>
+        <div class="rule">Hot, 10% battery, or 5 min untouched<span class="pill">Sleeps</span></div>
+        <div class="rule">You quit, or it crashes<span class="pill">Sleeps</span></div>
       </div>
     </div>
   </section>
@@ -133,6 +161,7 @@
         <button class="mi" type="button" role="menuitemcheckbox" aria-checked="true"><span class="check">✓</span>Work with lid closed</button>
         <button class="mi" type="button" role="menuitemcheckbox" aria-checked="true"><span class="check">✓</span>iPad as main display</button>
         <button class="mi" type="button" role="menuitemcheckbox" aria-checked="true"><span class="check">✓</span>Show pointer on iPad</button>
+        <button class="mi" type="button" role="menuitemcheckbox" aria-checked="false"><span class="check">✓</span>Remote and wireless with Sill</button>
         <button class="mi" type="button" role="menuitemcheckbox" aria-checked="true"><span class="check">✓</span>Open at login</button>
         <hr>
         <button class="mi" type="button" role="menuitem"><span class="check"></span>Quit Tether<kbd>⌘Q</kbd></button>
@@ -192,7 +221,7 @@ cd tether && ./scripts/build.sh --install</code></pre>
           <p>Click the iPad in the menu bar, then <b>Work with lid closed…</b> and type your password. Do this once, while you can still see a screen.</p>
         </li>
       </ol>
-      <p class="fine r" style="margin-top:18px">Needs an iPad that supports Sidecar, signed in to the same Apple ID as the Mac. With the lid shut, type on a keyboard attached to the iPad and point with touch, Pencil or a mouse. Sidecar doesn't pass the iPad's trackpad through.</p>
+      <p class="fine r" style="margin-top:18px">Needs an iPad that supports Sidecar, signed in to the same Apple ID as the Mac. With the lid shut, type on a keyboard attached to the iPad and point with touch, Pencil or a mouse. Sidecar doesn't pass the iPad's trackpad through. For no cable, add <a class="more" href="https://getsill.app">Sill</a> on both and turn on <b>Remote and wireless with Sill</b>.</p>
       <footer class="foot r">
         <p class="fine">For the Mac with a cracked screen. · <a href="https://github.com/rzrizaldy/tether">Source</a> · <a href="https://github.com/rzrizaldy/tether/blob/main/LICENSE">MIT License</a> · <a href="https://github.com/rzrizaldy/tether/issues">Report a problem</a></p>
         <div class="themes" role="group" aria-label="Colour theme">
@@ -205,6 +234,6 @@ cd tether && ./scripts/build.sh --install</code></pre>
   </section>
 </main>
 
-<script src="site.js?v=1"></script>
+<script src="site.js?v=2"></script>
 </body>
 </html>

@@ -13,9 +13,10 @@ final class PadPointer {
     private var window: NSPanel?
     private var imageView: NSImageView?
     private var timer: Timer?
+    private var monitors: [Any] = []
     private var hotSpot = NSPoint.zero
     private var shapeKey = ""
-    private var ticks = 0
+    private var lastPoint = NSPoint(x: -1, y: -1)
 
     var isOn: Bool { window != nil }
 
@@ -39,14 +40,27 @@ final class PadPointer {
 
         updateShape(force: true)
         follow()
-        let t = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+        // Move on every mouse event, at the mouse's own rate, so the drawn
+        // pointer doesn't trail the real one. The timer only catches up on the
+        // shape and on moves no event reports (a tap on the iPad, say).
+        let moves: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+        if let g = NSEvent.addGlobalMonitorForEvents(matching: moves, handler: { [weak self] _ in
             MainActor.assumeIsolated { self?.follow() }
+        }) { monitors.append(g) }
+        if let l = NSEvent.addLocalMonitorForEvents(matching: moves, handler: { [weak self] event in
+            MainActor.assumeIsolated { self?.follow() }
+            return event
+        }) { monitors.append(l) }
+        let t = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateShape(force: false); self?.follow() }
         }
         RunLoop.main.add(t, forMode: .common)
         timer = t
     }
 
     func hide() {
+        monitors.forEach(NSEvent.removeMonitor)
+        monitors.removeAll()
         timer?.invalidate()
         timer = nil
         window?.orderOut(nil)
@@ -61,8 +75,8 @@ final class PadPointer {
             if window.isVisible { window.orderOut(nil) }
             return
         }
-        ticks += 1
-        if ticks % 4 == 0 { updateShape(force: false) }   // the shape changes less often than the position
+        if p == lastPoint, window.isVisible { return }
+        lastPoint = p
         let size = window.frame.size
         // Cursor images are drawn from the top-left; Cocoa windows from the bottom-left.
         window.setFrameOrigin(NSPoint(x: p.x - hotSpot.x, y: p.y - (size.height - hotSpot.y)))
@@ -75,6 +89,7 @@ final class PadPointer {
         let key = "\(image.size.width)x\(image.size.height)@\(cursor.hotSpot.x),\(cursor.hotSpot.y)"
         guard force || key != shapeKey else { return }
         shapeKey = key
+        lastPoint = NSPoint(x: -1, y: -1)   // the hot spot moved: place it again
         let scale = CGFloat(max(1, Cursor.scale ?? 1))
         hotSpot = NSPoint(x: cursor.hotSpot.x * scale, y: cursor.hotSpot.y * scale)
         imageView?.image = image
