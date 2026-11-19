@@ -15,6 +15,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let sidecar = Sidecar()
     private let usb = USBWatcher()
     private let pointer = PadPointer()
+    private let screen = VirtualScreen()
     private let defaults = UserDefaults.standard
     private var item: NSStatusItem!
     private var timer: Timer?
@@ -34,6 +35,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var autoConnect: Bool { get { defaults.bool(forKey: "autoConnect") } set { defaults.set(newValue, forKey: "autoConnect") } }
     private var lidClosed: Bool { get { defaults.bool(forKey: "lidClosed") } set { defaults.set(newValue, forKey: "lidClosed") } }
     private var makeMain: Bool { get { defaults.bool(forKey: "makeMain") } set { defaults.set(newValue, forKey: "makeMain") } }
+    private var remote: Bool { get { defaults.bool(forKey: "remote") } set { defaults.set(newValue, forKey: "remote") } }
     private var bigCursor: Bool { get { defaults.bool(forKey: "bigCursor") } set { defaults.set(newValue, forKey: "bigCursor") } }
     /// Set by 1.2 builds that enlarged the pointer; put back on launch.
     private var savedCursor: Float { get { defaults.float(forKey: "savedCursor") } set { defaults.set(newValue, forKey: "savedCursor") } }
@@ -83,6 +85,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ note: Notification) {
         if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
         pointer.hide()
+        screen.hide()
     }
 
     // MARK: the whole brain
@@ -113,8 +116,20 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
             pointer.hide()
         }
 
+        // Remote mode: a virtual Retina screen for Screen Sharing, unless the
+        // iPad is right here on Sidecar, in which case that is the screen.
+        let wantScreen = remote && !connected
+        if wantScreen && !screen.isOn {
+            screen.show()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.placeMenuBarOnVirtual() }
+        } else if !wantScreen && screen.isOn {
+            screen.hide()
+        }
+
         // Cable in + iPad has been the screen → survive the lid closing.
-        let wantAwake = lidClosed && plugged && sawSidecarThisPlug && !userDisconnected
+        // Remote mode on a charger → stay up so you can reach the Mac from away.
+        let wantAwake = (lidClosed && plugged && sawSidecarThisPlug && !userDisconnected)
+            || (remote && lidClosed && Remote.onCharger)
         if wantAwake != awakeHeld {
             let ok = Power.keepAwakeWithLidClosed(wantAwake)
             Log.write("Lid-closed awake → \(wantAwake ? "on" : "off") \(ok ? "" : Power.isSetUp ? "(pmset failed)" : "(not set up yet)")")
@@ -165,6 +180,16 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         evaluate()
     }
 
+    /// Only take the menu bar when no real monitor is around to keep it.
+    private func placeMenuBarOnVirtual() {
+        guard let id = screen.displayID, makeMain else { return }
+        var ids = [CGDirectDisplayID](repeating: 0, count: 16)
+        var count: UInt32 = 0
+        CGGetActiveDisplayList(16, &ids, &count)
+        let others = ids.prefix(Int(count)).filter { $0 != id && CGDisplayIsBuiltin($0) == 0 }
+        if others.isEmpty { Displays.makeMain(id) }
+    }
+
     private func padScreenFrame() -> NSRect? {
         guard let device = sidecar.connected.first,
               let id = Displays.sidecarDisplay(named: Sidecar.name(device)) else { return nil }
@@ -203,6 +228,19 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         else { status = "Plug in your iPad" }
         menu.addItem(label(status))
         if awakeHeld { menu.addItem(label("Lid can be closed")) }
+        if remote {
+            let sharing = Remote.screenSharingOn
+            let name = Remote.tailscaleName()
+            menu.addItem(label(connected != nil ? "Remote: paused while iPad is plugged in" : Remote.onCharger ? "Remote: ready" : "Remote: plug in the charger to stay awake"))
+            if !sharing { menu.addItem(action("Turn On Screen Sharing…", #selector(tapSharing))) }
+            if let name {
+                let i = action("Copy vnc://\(name)", #selector(tapCopyAddress))
+                i.representedObject = "vnc://\(name)"
+                menu.addItem(i)
+            } else {
+                menu.addItem(action("Set Up Tailscale…", #selector(tapTailscale)))
+            }
+        }
 
         menu.addItem(.separator())
         if connected != nil {
@@ -216,6 +254,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggle(Power.isSetUp ? "Work with lid closed" : "Work with lid closed…", lidClosed && Power.isSetUp, #selector(tapLid)))
         menu.addItem(toggle("iPad as main display", makeMain, #selector(tapMain)))
         menu.addItem(toggle("Show pointer on iPad", bigCursor, #selector(tapCursor)))
+        menu.addItem(toggle("Remote mode", remote, #selector(tapRemote)))
         menu.addItem(toggle("Open at login", SMAppService.mainApp.status == .enabled, #selector(tapLogin)))
 
         menu.addItem(.separator())
@@ -245,6 +284,17 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func tapLog() { NSWorkspace.shared.open(Log.url) }
     @objc private func tapConnect() { userDisconnected = false; drops = 0; nextConnect = .distantPast; connect() }
     @objc private func tapDisconnect() { disconnect() }
+    @objc private func tapRemote() { remote.toggle(); Log.write("Remote mode \(remote ? "on" : "off")"); evaluate() }
+    @objc private func tapSharing() { Remote.openSharingSettings() }
+    @objc private func tapTailscale() {
+        let app = URL(fileURLWithPath: "/Applications/Tailscale.app")
+        if FileManager.default.fileExists(atPath: app.path) { NSWorkspace.shared.open(app) }
+        else if let url = URL(string: "https://tailscale.com/download/mac") { NSWorkspace.shared.open(url) }
+    }
+    @objc private func tapCopyAddress(_ sender: NSMenuItem) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(sender.representedObject as? String ?? "", forType: .string)
+    }
     @objc private func tapCursor() { bigCursor.toggle(); evaluate() }
     @objc private func tapAuto() { autoConnect.toggle(); evaluate() }
     @objc private func tapMain() { makeMain.toggle(); if makeMain { wantMain = true; placeMenuBarOnPad() } }

@@ -10,7 +10,7 @@ APP=build/Tether.app
 rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 for arch in arm64 x86_64; do
-  swiftc -O -swift-version 5 -parse-as-library \
+  swiftc -O -swift-version 5 -parse-as-library -import-objc-header Sources/Private.h \
     -target "$arch-apple-macos13.0" \
     -framework AppKit -framework IOKit -framework ServiceManagement \
     Sources/*.swift -o "build/Tether-$arch"
