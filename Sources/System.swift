@@ -74,3 +74,26 @@ enum Displays {
         return CGCompleteDisplayConfiguration(config, .permanently) == .success
     }
 }
+
+/// The pointer size, through SkyLight's private SLSGetCursorScale /
+/// SLSSetCursorScale (what Accessibility's "Pointer size" slider changes).
+/// Sidecar draws the Mac's own pointer, so this makes it readable on an iPad.
+enum Cursor {
+    private typealias Conn = @convention(c) () -> Int32
+    private typealias Get = @convention(c) (Int32, UnsafeMutablePointer<Float>) -> Int32
+    private typealias Set = @convention(c) (Int32, Float) -> Int32
+    private static let lib = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY)
+    private static func sym<T>(_ name: String, _ type: T.Type) -> T? { dlsym(lib, name).map { unsafeBitCast($0, to: type) } }
+
+    static var scale: Float? {
+        get {
+            guard let conn = sym("SLSMainConnectionID", Conn.self), let get = sym("SLSGetCursorScale", Get.self) else { return nil }
+            var value: Float = 0
+            return get(conn(), &value) == 0 ? value : nil
+        }
+        set {
+            guard let v = newValue, let conn = sym("SLSMainConnectionID", Conn.self), let set = sym("SLSSetCursorScale", Set.self) else { return }
+            _ = set(conn(), v)
+        }
+    }
+}

@@ -14,6 +14,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let sidecar = Sidecar()
     private let usb = USBWatcher()
+    private let halo = Halo()
     private let defaults = UserDefaults.standard
     private var item: NSStatusItem!
     private var timer: Timer?
@@ -24,17 +25,25 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var wantMain = false
     private var lastError: String?
     private var attempt = 0
+    /// Backoff so a Sidecar that keeps dropping isn't hammered every 4 seconds.
+    private var wasConnected = false
+    private var connectedAt = Date.distantPast
+    private var drops = 0
+    private var nextConnect = Date.distantPast
 
     private var autoConnect: Bool { get { defaults.bool(forKey: "autoConnect") } set { defaults.set(newValue, forKey: "autoConnect") } }
     private var lidClosed: Bool { get { defaults.bool(forKey: "lidClosed") } set { defaults.set(newValue, forKey: "lidClosed") } }
     private var makeMain: Bool { get { defaults.bool(forKey: "makeMain") } set { defaults.set(newValue, forKey: "makeMain") } }
+    private var bigCursor: Bool { get { defaults.bool(forKey: "bigCursor") } set { defaults.set(newValue, forKey: "bigCursor") } }
+    /// The cursor size from before Tether enlarged it; 0 when it isn't enlarged.
+    private var savedCursor: Float { get { defaults.float(forKey: "savedCursor") } set { defaults.set(newValue, forKey: "savedCursor") } }
     /// Persisted so a crash never leaves the Mac unable to sleep in your bag.
     private var awakeHeld: Bool { get { defaults.bool(forKey: "awakeHeld") } set { defaults.set(newValue, forKey: "awakeHeld") } }
 
     // MARK: lifecycle
 
     func applicationDidFinishLaunching(_ note: Notification) {
-        defaults.register(defaults: ["autoConnect": true, "lidClosed": true, "makeMain": true])
+        defaults.register(defaults: ["autoConnect": true, "lidClosed": true, "makeMain": true, "bigCursor": true])
 
         if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
@@ -69,6 +78,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ note: Notification) {
         if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
+        if savedCursor > 0 { Cursor.scale = savedCursor; savedCursor = 0 }
     }
 
     // MARK: the whole brain
@@ -77,8 +87,30 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let plugged = usb.iPadPlugged
         let connected = sidecar.isConnected
 
-        if !plugged { sawSidecarThisPlug = false; userDisconnected = false }
+        if !plugged { sawSidecarThisPlug = false; userDisconnected = false; drops = 0; nextConnect = .distantPast }
         if plugged && connected { sawSidecarThisPlug = true }
+
+        if connected && !wasConnected { connectedAt = Date() }
+        if !connected && wasConnected && plugged && !userDisconnected {
+            let held = Date().timeIntervalSince(connectedAt)
+            drops = held < 20 ? drops + 1 : 0
+            let wait = min(30, 2 * pow(2, Double(drops)))
+            nextConnect = Date().addingTimeInterval(wait)
+            Log.write("Sidecar dropped after \(Int(held))s; next try in \(Int(wait))s")
+        }
+        wasConnected = connected
+
+        // Bigger pointer and a ring around it while the iPad is the screen;
+        // Sidecar hides the real pointer during touch, the ring stays visible.
+        let wantBig = bigCursor && connected
+        if wantBig && !halo.isOn { halo.show() } else if !wantBig && halo.isOn { halo.hide() }
+        if wantBig && savedCursor == 0, let now = Cursor.scale {
+            savedCursor = max(now, 1)
+            Cursor.scale = max(now, 2)
+        } else if !wantBig && savedCursor > 0 {
+            Cursor.scale = savedCursor
+            savedCursor = 0
+        }
 
         // Cable in + iPad has been the screen → survive the lid closing.
         let wantAwake = lidClosed && plugged && sawSidecarThisPlug && !userDisconnected
@@ -89,7 +121,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         if let since = connectingSince, Date().timeIntervalSince(since) > 30 { connectingSince = nil }
-        if plugged && autoConnect && !userDisconnected && !connected && connectingSince == nil {
+        if plugged && autoConnect && !userDisconnected && !connected && connectingSince == nil && Date() >= nextConnect {
             connect()
         }
         refreshIcon()
@@ -174,6 +206,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggle("Auto-connect on cable", autoConnect, #selector(tapAuto)))
         menu.addItem(toggle(Power.isSetUp ? "Work with lid closed" : "Work with lid closed…", lidClosed && Power.isSetUp, #selector(tapLid)))
         menu.addItem(toggle("iPad as main display", makeMain, #selector(tapMain)))
+        menu.addItem(toggle("Show pointer on iPad", bigCursor, #selector(tapCursor)))
         menu.addItem(toggle("Open at login", SMAppService.mainApp.status == .enabled, #selector(tapLogin)))
 
         menu.addItem(.separator())
@@ -201,8 +234,9 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func tapLog() { NSWorkspace.shared.open(Log.url) }
-    @objc private func tapConnect() { userDisconnected = false; connect() }
+    @objc private func tapConnect() { userDisconnected = false; drops = 0; nextConnect = .distantPast; connect() }
     @objc private func tapDisconnect() { disconnect() }
+    @objc private func tapCursor() { bigCursor.toggle(); evaluate() }
     @objc private func tapAuto() { autoConnect.toggle(); evaluate() }
     @objc private func tapMain() { makeMain.toggle(); if makeMain { wantMain = true; placeMenuBarOnPad() } }
 

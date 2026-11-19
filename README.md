@@ -19,7 +19,7 @@
 <p align="center">
   <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-14212a?style=flat-square">
   <img alt="Apple silicon and Intel" src="https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-universal-14212a?style=flat-square">
-  <img alt="Swift" src="https://img.shields.io/badge/Swift-400%20lines-5ad6a0?style=flat-square">
+  <img alt="Swift" src="https://img.shields.io/badge/Swift-600%20lines-5ad6a0?style=flat-square">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-5ad6a0?style=flat-square">
 </p>
 
@@ -41,6 +41,7 @@ Tether fixes both. Plug in the cable, and the iPad is your screen. Close the lid
 | **The cable is the switch** | Tether watches USB. When an iPad shows up, it turns on Sidecar and forces it over the cable. If the iPad is locked, it keeps trying until you unlock it. |
 | **The menu bar moves** | The iPad becomes the main display, so the Dock and new windows open there, not on the broken screen. |
 | **Close the lid** | A Mac sleeps when you close the lid unless a monitor is plugged in, and macOS doesn't count an iPad as one. Tether keeps the Mac awake while the cable is in. |
+| **You can find the pointer** | Sidecar hides the Mac's pointer while you use the iPad by touch. Tether draws a mint ring around it and makes it twice as big, then puts it back when you unplug. |
 | **Unplug, and it's a normal Mac** | Sleep comes back when you unplug, when you quit, and on the next launch if Tether ever crashes. It won't overheat in your bag. |
 
 It lives in the menu bar. There's no window, no Dock icon and no settings screen, and it opens at login.
@@ -54,6 +55,7 @@ Disconnect
 ✓ Auto-connect on cable
 ✓ Work with lid closed
 ✓ iPad as main display
+✓ Show pointer on iPad
 ✓ Open at login
 ─────────────────────
 Quit Tether        ⌘Q
@@ -71,7 +73,7 @@ Quit Tether        ⌘Q
 ### You'll need
 
 - An iPad that supports Sidecar (iPadOS 13 or later), signed in to the same Apple ID as the Mac. The iPad has to trust the Mac the first time you plug it in.
-- A keyboard when the lid is closed. One attached to the iPad works through Sidecar, or use a Bluetooth keyboard or mouse.
+- A keyboard and a way to point when the lid is closed. The keys of an iPad Magic Keyboard work through Sidecar, but **its trackpad doesn't**: Sidecar never lets the iPad's trackpad move the Mac pointer. Use touch, Apple Pencil, or a mouse plugged into the Mac.
 - macOS 13 or later. Built and tested on macOS 27.
 
 ### Good to know
@@ -118,6 +120,7 @@ cd tether
 - [`Sources/Sidecar.swift`](Sources/Sidecar.swift): connects and disconnects through `SidecarCore`.
 - [`Sources/USBWatcher.swift`](Sources/USBWatcher.swift): IOKit notifications for an iPad on USB.
 - [`Sources/System.swift`](Sources/System.swift): the lid-closed switch (`pmset`) and moving the main display.
+- [`Sources/Halo.swift`](Sources/Halo.swift): the ring that keeps the pointer visible on the iPad.
 - [`Sources/Log.swift`](Sources/Log.swift): the log at `~/Library/Logs/Tether.log`.
 - [`docs/`](docs): the website, served by GitHub Pages.
 - [`scripts/`](scripts): `build.sh` and `make-icon.swift`.
