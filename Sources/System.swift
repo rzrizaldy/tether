@@ -1,5 +1,7 @@
 import AppKit
 import CoreGraphics
+import IOKit.ps
+import IOKit.pwr_mgt
 
 /// Lid-closed support. macOS sleeps on lid close unless a "real" external
 /// display is attached, and Sidecar doesn't count. `pmset disablesleep`
@@ -28,6 +30,57 @@ enum Power {
         var error: NSDictionary?
         NSAppleScript(source: script)?.executeAndReturnError(&error)
         return error == nil && isSetUp
+    }
+
+    /// pmset's SleepDisabled as it is now, whoever set it.
+    static var sleepDisabledNow: Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+        p.arguments = ["-g"]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return false }
+        let out = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        p.waitUntilExit()
+        return out.split(separator: "\n").contains {
+            $0.contains("SleepDisabled") && $0.split(whereSeparator: \.isWhitespace).last == "1"
+        }
+    }
+
+    /// Amphetamine is the one other app allowed to keep the Mac up: while it
+    /// holds a power assertion, Tether leaves SleepDisabled to it.
+    static var amphetamineHolding: Bool {
+        var byProcess: Unmanaged<CFDictionary>?
+        guard IOPMCopyAssertionsByProcess(&byProcess) == kIOReturnSuccess,
+              let dict = byProcess?.takeRetainedValue() as? [NSNumber: Any] else { return false }
+        return dict.keys.contains {
+            NSRunningApplication(processIdentifier: pid_t($0.int32Value))?.bundleIdentifier == "com.if.Amphetamine"
+        }
+    }
+
+    /// The lid, from IOPMrootDomain's AppleClamshellState.
+    static var lidShut: Bool {
+        let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
+        defer { IOObjectRelease(root) }
+        return (IORegistryEntryCreateCFProperty(root, "AppleClamshellState" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? Bool) ?? false
+    }
+
+    static var batteryPercent: Int? {
+        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else { return nil }
+        for source in list {
+            guard let d = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any],
+                  let now = d[kIOPSCurrentCapacityKey] as? Int, let max = d[kIOPSMaxCapacityKey] as? Int, max > 0 else { continue }
+            return now * 100 / max
+        }
+        return nil
+    }
+
+    /// Seconds since any input, the iPad's through Sidecar or Sill included.
+    static var idleSeconds: Double {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
     }
 
     @discardableResult

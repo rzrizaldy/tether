@@ -26,6 +26,12 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var wantMain = false
     private var lastError: String?
     private var attempt = 0
+    /// When Sidecar was last up; a short drop doesn't let the Mac sleep.
+    private var lastSidecar = Date.distantPast
+    /// Why the bag guard let the Mac sleep; cleared when the lid opens or the cable goes back in.
+    private var guardReason: String?
+    private var guardPlugged = false
+    private var borrowedLogged = false
     /// Backoff so a Sidecar that keeps dropping isn't hammered every 4 seconds.
     private var wasConnected = false
     private var connectedAt = Date.distantPast
@@ -52,10 +58,10 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         defaults.register(defaults: ["autoConnect": true, "lidClosed": true, "makeMain": true, "bigCursor": true])
 
-        if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
+        if awakeHeld { release("Tether restarted") }
         if savedCursor > 0 { Cursor.scale = savedCursor; savedCursor = 0 }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-        Log.write("Tether \(version) started on macOS \(ProcessInfo.processInfo.operatingSystemVersionString). Sidecar \(sidecar.isAvailable ? "found" : "MISSING"), lid-closed \(Power.isSetUp ? "set up" : "not set up")")
+        Log.write("Tether \(version) started on macOS \(ProcessInfo.processInfo.operatingSystemVersionString). Sidecar \(sidecar.isAvailable ? "found" : "MISSING"), lid-closed \(Power.isSetUp ? "set up" : "not set up"). Lid \(Power.lidShut ? "shut" : "open"), \(Remote.onCharger ? "on charger" : "on battery") \(Power.batteryPercent.map { "\($0)%" } ?? "?"), idle \(Int(Power.idleSeconds))s")
 
         if !defaults.bool(forKey: "didSetUpLogin") {
             try? SMAppService.mainApp.register()
@@ -88,7 +94,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ note: Notification) {
-        if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
+        if awakeHeld { release("Tether quit") }
         pointer.hide()
         screen.hide()
     }
@@ -102,6 +108,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !plugged { sawSidecarThisPlug = false; userDisconnected = false; drops = 0; nextConnect = .distantPast }
         if plugged && connected { sawSidecarThisPlug = true }
 
+        if connected { lastSidecar = Date() }
         if connected && !wasConnected { connectedAt = Date() }
         if !connected && wasConnected && plugged && !userDisconnected {
             let held = Date().timeIntervalSince(connectedAt)
@@ -134,21 +141,73 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
             screen.hide()
         }
 
-        // Cable in + iPad has been the screen → survive the lid closing.
-        // Remote mode on a charger → stay up so you can reach the Mac from away.
-        let wantAwake = (lidClosed && plugged && sawSidecarThisPlug && !userDisconnected)
-            || (remote && lidClosed && Remote.onCharger)
-        if wantAwake != awakeHeld {
-            let ok = Power.keepAwakeWithLidClosed(wantAwake)
-            Log.write("Lid-closed awake → \(wantAwake ? "on" : "off") \(ok ? "" : Power.isSetUp ? "(pmset failed)" : "(not set up yet)")")
-            if ok || !Power.isSetUp { awakeHeld = wantAwake && Power.isSetUp }
+        // Cable in and the iPad is (or was, a minute ago) the screen → survive
+        // the lid closing. Remote with Sill → stay up so the iPad can reach it.
+        let sidecarRecently = connected || Date().timeIntervalSince(lastSidecar) < 90
+        let wanted = (lidClosed && plugged && sawSidecarThisPlug && sidecarRecently && !userDisconnected)
+            || (remote && lidClosed && Remote.onCharger)   // no charger = in a bag, so sleep
+        let wantAwake = wanted && bagGuard(plugged: plugged)
+        if wantAwake && !awakeHeld {
+            if Power.sleepDisabledNow {
+                // Someone else (Amphetamine) already holds it: don't take it over,
+                // so letting go later can't switch off theirs.
+                if !borrowedLogged { Log.write("Lid-closed awake: already on by another app, leaving it to them"); borrowedLogged = true }
+            } else {
+                let ok = Power.keepAwakeWithLidClosed(true)
+                Log.write("Lid-closed awake → on \(ok ? "" : Power.isSetUp ? "(pmset failed)" : "(not set up yet)")")
+                awakeHeld = ok
+            }
+        } else if !wantAwake && awakeHeld {
+            release("not needed")
         }
+        if !wantAwake { borrowedLogged = false }
 
         if let since = connectingSince, Date().timeIntervalSince(since) > 30 { connectingSince = nil }
         if plugged && autoConnect && !userDisconnected && !connected && connectingSince == nil && Date() >= nextConnect {
             connect()
         }
         refreshIcon()
+    }
+
+    /// Lets go of SleepDisabled, which Tether set. If Amphetamine has a
+    /// session running meanwhile, its keep-awake wins and the setting stays.
+    private func release(_ why: String) {
+        awakeHeld = false
+        if Power.amphetamineHolding {
+            Log.write("Lid-closed awake → left on: Amphetamine is keeping the Mac up (\(why))")
+            return
+        }
+        let ok = Power.keepAwakeWithLidClosed(false)
+        Log.write("Lid-closed awake → off (\(why))\(ok ? "" : " (pmset failed)")")
+    }
+
+    /// The bag guard: with the lid shut, let the Mac sleep anyway when it runs
+    /// hot, when the battery runs low, or when nobody has touched it for five
+    /// minutes on battery (it's in a bag, not in use). It stays tripped until
+    /// the lid opens or the cable is plugged in again.
+    private func bagGuard(plugged: Bool) -> Bool {
+        let lidShut = Power.lidShut
+        if !lidShut || (plugged && !guardPlugged) {
+            if guardReason != nil { Log.write("Bag guard cleared") }
+            guardReason = nil
+        }
+        guardPlugged = plugged
+        guard lidShut, guardReason == nil else { return guardReason == nil }
+        let onCharger = Remote.onCharger
+        var reason: String?
+        if ProcessInfo.processInfo.thermalState.rawValue >= ProcessInfo.ThermalState.serious.rawValue {
+            reason = "the Mac is running hot"
+        } else if !onCharger, let pct = Power.batteryPercent, pct <= 10 {
+            reason = "the battery is at \(pct)%"
+        } else if !onCharger, Power.idleSeconds > 300 {
+            reason = "nobody used it for 5 minutes on battery"
+        }
+        if let reason {
+            guardReason = reason
+            Log.write("Bag guard: letting the Mac sleep, \(reason)")
+            return false
+        }
+        return true
     }
 
     private func connect() {
@@ -236,6 +295,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         else { status = "Plug in your iPad" }
         menu.addItem(label(status))
         if awakeHeld { menu.addItem(label("Lid can be closed")) }
+        if let why = guardReason { menu.addItem(label("Sleeping with the lid shut: \(why)")) }
         if remote {
             let name = Remote.tailscaleName()
             menu.addItem(label(connected != nil ? "Remote: paused, the cable is on Sidecar" : Remote.onCharger ? (sillInstalled ? "Remote: ready in Sill" : "Remote: ready") : "Remote: plug in the charger to stay awake"))
