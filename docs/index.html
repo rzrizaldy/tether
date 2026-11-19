@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tether · your iPad as your Mac's screen</title>
+<meta name="description" content="Broken MacBook screen? Plug in your iPad. Tether makes it the display the moment the cable goes in, and lets you close the lid and keep working. Free and open source.">
+<meta property="og:title" content="Tether · your iPad as your Mac's screen">
+<meta property="og:description" content="Plug in your iPad and it becomes the screen. Close the lid and keep working.">
+<meta property="og:image" content="https://rzrizaldy.github.io/tether/img/icon.png">
+<meta name="theme-color" content="#e7eef1">
+<link rel="icon" href="img/icon.png">
+<script>
+  try {
+    const saved = new URLSearchParams(location.search).get("theme") || localStorage.getItem("tether-theme");
+    document.documentElement.dataset.theme = saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  } catch { document.documentElement.dataset.theme = "light"; }
+</script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@144,750,100&text=Tether&display=swap">
+<link rel="stylesheet" href="site.css?v=1">
+</head>
+<body>
+
+<header class="nav">
+  <a class="brand" href="#top" aria-label="Tether"><span class="logo" aria-hidden="true"><span class="ch">T</span><span class="ch">e</span><span class="ch">t</span><span class="ch">h</span><span class="ch">e</span><span class="ch">r</span><span class="led-mark" aria-hidden="true"></span></span></a>
+  <nav aria-label="Sections">
+    <a href="#how">How</a>
+    <a href="#lid">Lid closed</a>
+    <a href="#menu">Menu</a>
+    <a href="#open">Open source</a>
+  </nav>
+  <div class="nav-right">
+    <a class="gh" href="https://github.com/rzrizaldy/tether" aria-label="Source on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+    <a class="get" href="https://github.com/rzrizaldy/tether/releases/latest/download/Tether.zip">Download</a>
+  </div>
+</header>
+
+<div class="rail" id="rail" aria-label="Slides"></div>
+<button class="next" id="next" aria-label="Next slide"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 4v12m0 0l-5-5m5 5l5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+
+<main class="deck" id="deck">
+
+  <section class="slide" id="top" data-title="Tether">
+    <div class="wrap center">
+      <p class="hero-logo r"><span class="logo" role="img" aria-label="Tether"><span class="ch" aria-hidden="true">T</span><span class="ch" aria-hidden="true">e</span><span class="ch" aria-hidden="true">t</span><span class="ch" aria-hidden="true">h</span><span class="ch" aria-hidden="true">e</span><span class="ch" aria-hidden="true">r</span><span class="led-mark" aria-hidden="true"></span></span></p>
+      <h1 class="r">Broken screen?<br><span class="grad">Plug in your iPad.</span></h1>
+      <p class="lede r">Tether makes your iPad the Mac's screen as soon as the cable goes in. Close the lid and keep working.</p>
+      <p class="links r"><a class="btn" href="https://github.com/rzrizaldy/tether/releases/latest/download/Tether.zip">Download for Mac</a><a class="more" href="#how">See how it works <span aria-hidden="true">›</span></a></p>
+      <div class="demo r" id="demo" aria-hidden="true">
+        <div class="desk">
+          <div class="mac">
+            <div class="lid">
+              <span class="notch"></span>
+              <div class="broken">
+                <span class="ink"></span>
+                <svg viewBox="0 0 100 64" preserveAspectRatio="none"><path d="M70 26 L58 4 M70 26 L92 10 M70 26 L98 34 M70 26 L84 60 M70 26 L52 50 M70 26 L36 30 M70 26 L60 16 L48 12 M84 60 L74 64 M36 30 L18 22 M52 50 L40 64 M92 10 L99 2 M58 4 L54 0"/></svg>
+              </div>
+            </div>
+            <div class="base"><span class="port"></span></div>
+          </div>
+          <div class="pad">
+            <span class="cam"></span>
+            <div class="screen">
+              <div class="bar"><b></b><b>Finder</b><i>File</i><i>Edit</i><i>View</i><span class="tray"><svg viewBox="0 0 22 16"><rect x="1" y="2" width="20" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>9:41</span></div>
+              <span class="win"></span><span class="win two"></span>
+            </div>
+          </div>
+          <svg class="cable" id="cable"><path pathLength="1" d=""/></svg>
+          <span class="led-dot" id="ledDot"></span>
+        </div>
+        <p class="status"><span class="dot"></span><span id="status">The Mac's screen is broken</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="how" data-title="How it works">
+    <div class="wrap center">
+      <p class="eyebrow r">How it works</p>
+      <h2 class="r">The cable is<br><span class="grad">the switch.</span></h2>
+      <p class="lede r">Nothing to open, no Control Center, no clicking around on a screen you can't see.</p>
+      <div class="tiles three left">
+        <div class="tile r">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M7 8h10v3a5 5 0 0 1-10 0V8zM12 16v5"/></svg></div>
+          <h3>Plug it in</h3>
+          <p>Tether watches USB. When an iPad shows up, it starts. When it leaves, it stops.</p>
+        </div>
+        <div class="tile r">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="13" rx="2.5"/><path d="M8 21h8"/><path d="M9 11.5l2 2 4-4"/></svg></div>
+          <h3>Sidecar connects</h3>
+          <p>It turns on Apple's own Sidecar for you. If the iPad is locked, it keeps trying until you unlock it.</p>
+        </div>
+        <div class="tile r">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="15" rx="2.5"/><path d="M3 8.5h18"/></svg></div>
+          <h3>The menu bar moves</h3>
+          <p>The iPad becomes the main display, so the Dock and new windows open there, not on the broken screen.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide night" id="lid" data-title="Lid closed">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow r">Lid closed</p>
+        <h2 class="r">Close the lid.<br><span class="dim">Keep working.</span></h2>
+        <p class="body r">A Mac sleeps when you close the lid unless a monitor is plugged in, and an iPad doesn't count. Tether keeps it awake <strong>only while the cable is in</strong>. Unplug, and it sleeps like it always has, so it won't cook in your bag.</p>
+      </div>
+      <div class="rules r">
+        <div class="rule">Cable in, iPad showing<span class="pill awake">Stays awake</span></div>
+        <div class="rule">Cable out<span class="pill">Sleeps</span></div>
+        <div class="rule">You quit Tether<span class="pill">Sleeps</span></div>
+        <div class="rule">Tether crashes<span class="pill">Fixed at next launch</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="menu" data-title="The menu">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow r">The menu</p>
+        <h2 class="r">One menu.<br><span class="dim">That's the app.</span></h2>
+        <p class="body r">No window, no Dock icon, no settings screen. Everything starts switched on, and it opens at login. Untick what you don't want. Try it.</p>
+      </div>
+      <div class="menu r" role="menu" aria-label="Tether menu">
+        <span class="menu-anchor" aria-hidden="true"><svg viewBox="0 0 22 16"><rect x="1" y="1.5" width="20" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>
+        <div class="mi label">Your iPad · Connected</div>
+        <div class="mi label">Lid can be closed</div>
+        <hr>
+        <button class="mi" type="button" role="menuitem"><span class="check"></span>Disconnect</button>
+        <hr>
+        <button class="mi" type="button" role="menuitemcheckbox" aria-checked="true"><span class="check">✓</span>Auto-connect on cable</button>
+        <button class="mi" type="button" role="menuitemcheckbox" aria-checked="true"><span class="check">✓</span>Work with lid closed</button>
+        <button class="mi" type="button" role="menuitemcheckbox" aria-checked="true"><span class="check">✓</span>iPad as main display</button>
+        <button class="mi" type="button" role="menuitemcheckbox" aria-checked="true"><span class="check">✓</span>Open at login</button>
+        <hr>
+        <button class="mi" type="button" role="menuitem"><span class="check"></span>Quit Tether<kbd>⌘Q</kbd></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="open" data-title="Open source">
+    <div class="wrap center">
+      <p class="eyebrow r">Open source</p>
+      <h2 class="r">Small enough<br><span class="grad">to read over coffee.</span></h2>
+      <p class="lede r">Four Swift files, 400 lines, MIT license. No account, no network, no analytics.</p>
+      <div class="tiles three left">
+        <div class="tile r">
+          <h3>Nothing leaves your Mac</h3>
+          <p>Tether makes no network requests. It talks to USB, Sidecar and the display settings, and that's all.</p>
+        </div>
+        <div class="tile r">
+          <h3>One password, once</h3>
+          <p>Keeping a Mac awake with the lid shut needs admin rights. You type your password once, and it allows <strong>one command</strong>: <code>pmset -a disablesleep 0|1</code>.</p>
+        </div>
+        <div class="tile r">
+          <h3>Gone in one line</h3>
+          <p>Delete the app and the rule, and your Mac is exactly as it was. The command is in the README.</p>
+        </div>
+      </div>
+      <div class="code r">
+        <button class="copy" type="button" data-copy="git clone https://github.com/rzrizaldy/tether.git && cd tether && ./scripts/build.sh --install">Copy</button>
+        <pre><code><span class="c"># build it yourself</span>
+git clone https://github.com/rzrizaldy/tether.git
+cd tether && ./scripts/build.sh --install</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="get" data-title="Get it">
+    <div class="wrap center">
+      <img class="app-icon" src="img/icon.png" alt="" width="132" height="132">
+      <h2 class="r huge">Plug in.</h2>
+      <p class="lede r">Free, open source, and it works on its own once it's set up.</p>
+      <p class="links r"><a class="btn" href="https://github.com/rzrizaldy/tether/releases/latest/download/Tether.zip">Download for Mac</a><a class="btn ghost" href="https://github.com/rzrizaldy/tether">View on GitHub</a></p>
+      <p class="meta r">Tether.zip · macOS 13+ · Apple silicon and Intel · <a href="https://github.com/rzrizaldy/tether/releases">All versions</a> · <a href="https://github.com/rzrizaldy/tether/releases/latest">SHA-256</a></p>
+      <ol class="steps r">
+        <li>
+          <span class="step-n">1</span>
+          <h3>Unzip and move</h3>
+          <p>Drag Tether into Applications.</p>
+        </li>
+        <li>
+          <span class="step-n">2</span>
+          <h3>Allow it once</h3>
+          <p>It isn't notarized, so macOS stops the first open. Go to System Settings › Privacy &amp; Security and click <b>Open Anyway</b>.</p>
+        </li>
+        <li>
+          <span class="step-n">3</span>
+          <h3>Turn on lid closed</h3>
+          <p>Click the iPad in the menu bar, then <b>Work with lid closed…</b> and type your password. Do this once, while you can still see a screen.</p>
+        </li>
+      </ol>
+      <p class="fine r" style="margin-top:18px">Needs an iPad that supports Sidecar, signed in to the same Apple ID as the Mac. With the lid shut, type on a keyboard attached to the iPad or a Bluetooth one.</p>
+      <footer class="foot r">
+        <p class="fine">For the Mac with a cracked screen. · <a href="https://github.com/rzrizaldy/tether">Source</a> · <a href="https://github.com/rzrizaldy/tether/blob/main/LICENSE">MIT License</a> · <a href="https://github.com/rzrizaldy/tether/issues">Report a problem</a></p>
+        <div class="themes" role="group" aria-label="Colour theme">
+          <button type="button" data-theme="light" aria-pressed="true"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><path d="M8 1.2v1.6M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M3.2 12.8l1.1-1.1M11.7 4.3l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span class="label">Light</span></button>
+          <button type="button" data-theme="dark" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 10.2A5.8 5.8 0 0 1 5.8 2.6a5.8 5.8 0 1 0 7.6 7.6z" fill="currentColor"/></svg><span class="label">Dark</span></button>
+          <button type="button" data-theme="colorful" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5.2" cy="6" r="3.4" fill="#bfb3dc"/><circle cx="10.8" cy="6" r="3.4" fill="#2a2347"/><circle cx="8" cy="10.6" r="3.4" fill="#ff9d66"/></svg><span class="label">Colorful</span></button>
+        </div>
+      </footer>
+    </div>
+  </section>
+</main>
+
+<script src="site.js?v=1"></script>
+</body>
+</html>

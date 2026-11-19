@@ -1,0 +1,206 @@
+import AppKit
+import ServiceManagement
+
+@main
+@MainActor
+final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = Tether()
+        app.delegate = delegate
+        app.setActivationPolicy(.accessory)
+        app.run()
+    }
+
+    private let sidecar = Sidecar()
+    private let usb = USBWatcher()
+    private let defaults = UserDefaults.standard
+    private var item: NSStatusItem!
+    private var timer: Timer?
+
+    private var connectingSince: Date?
+    private var sawSidecarThisPlug = false
+    private var userDisconnected = false
+    private var wantMain = false
+    private var lastError: String?
+
+    private var autoConnect: Bool { get { defaults.bool(forKey: "autoConnect") } set { defaults.set(newValue, forKey: "autoConnect") } }
+    private var lidClosed: Bool { get { defaults.bool(forKey: "lidClosed") } set { defaults.set(newValue, forKey: "lidClosed") } }
+    private var makeMain: Bool { get { defaults.bool(forKey: "makeMain") } set { defaults.set(newValue, forKey: "makeMain") } }
+    /// Persisted so a crash never leaves the Mac unable to sleep in your bag.
+    private var awakeHeld: Bool { get { defaults.bool(forKey: "awakeHeld") } set { defaults.set(newValue, forKey: "awakeHeld") } }
+
+    // MARK: lifecycle
+
+    func applicationDidFinishLaunching(_ note: Notification) {
+        defaults.register(defaults: ["autoConnect": true, "lidClosed": true, "makeMain": true])
+
+        if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
+
+        if !defaults.bool(forKey: "didSetUpLogin") {
+            try? SMAppService.mainApp.register()
+            defaults.set(true, forKey: "didSetUpLogin")
+        }
+
+        item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        let menu = NSMenu()
+        menu.delegate = self
+        menu.autoenablesItems = false
+        item.menu = menu
+
+        usb.onChange = { [weak self] in self?.evaluate() }
+        usb.start()
+
+        let nc = NSWorkspace.shared.notificationCenter
+        nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.evaluate() }
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.placeMenuBarOnPad() }
+        }
+        timer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.evaluate() }
+        }
+        evaluate()
+    }
+
+    func applicationWillTerminate(_ note: Notification) {
+        if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
+    }
+
+    // MARK: the whole brain
+
+    private func evaluate() {
+        let plugged = usb.iPadPlugged
+        let connected = sidecar.isConnected
+
+        if !plugged { sawSidecarThisPlug = false; userDisconnected = false }
+        if plugged && connected { sawSidecarThisPlug = true }
+
+        // Cable in + iPad has been the screen → survive the lid closing.
+        let wantAwake = lidClosed && plugged && sawSidecarThisPlug && !userDisconnected
+        if wantAwake != awakeHeld, Power.keepAwakeWithLidClosed(wantAwake) || !Power.isSetUp {
+            awakeHeld = wantAwake && Power.isSetUp
+        }
+
+        if let since = connectingSince, Date().timeIntervalSince(since) > 30 { connectingSince = nil }
+        if plugged && autoConnect && !userDisconnected && !connected && connectingSince == nil {
+            connect()
+        }
+        refreshIcon()
+    }
+
+    private func connect() {
+        guard let device = sidecar.devices.first else {
+            lastError = sidecar.isAvailable ? "iPad not found — unlock it and check Apple ID" : "Sidecar unavailable on this Mac"
+            return
+        }
+        connectingSince = Date()
+        refreshIcon()
+        sidecar.connect(device) { [weak self] error in
+            guard let self else { return }
+            self.connectingSince = nil
+            self.lastError = error?.localizedDescription
+            if error == nil {
+                self.wantMain = true
+                self.placeMenuBarOnPad()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.placeMenuBarOnPad() }
+            }
+            self.evaluate()
+        }
+    }
+
+    private func disconnect() {
+        userDisconnected = true
+        for d in sidecar.connected { sidecar.disconnect(d) { [weak self] _ in self?.evaluate() } }
+        evaluate()
+    }
+
+    private func placeMenuBarOnPad() {
+        guard wantMain, makeMain, let device = sidecar.connected.first,
+              let id = Displays.sidecarDisplay(named: Sidecar.name(device)) else { return }
+        if Displays.makeMain(id) { wantMain = false }
+    }
+
+    // MARK: menu bar
+
+    private func refreshIcon() {
+        guard let button = item?.button else { return }
+        let connected = sidecar.isConnected
+        let symbol = connected ? "ipad.landscape.badge.play" : "ipad.landscape"
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Tether")
+            ?? NSImage(systemSymbolName: "ipad.landscape", accessibilityDescription: "Tether")
+        image?.isTemplate = true
+        button.image = image
+        button.appearsDisabled = !connected && !usb.iPadPlugged
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let connected = sidecar.connected.first
+        let status: String
+        if let d = connected { status = "\(Sidecar.name(d)) · Connected" }
+        else if connectingSince != nil { status = "Connecting…" }
+        else if usb.iPadPlugged, let e = lastError { status = e }
+        else if usb.iPadPlugged { status = "iPad plugged in" }
+        else { status = "Plug in your iPad" }
+        menu.addItem(label(status))
+        if awakeHeld { menu.addItem(label("Lid can be closed")) }
+
+        menu.addItem(.separator())
+        if connected != nil {
+            menu.addItem(action("Disconnect", #selector(tapDisconnect)))
+        } else {
+            menu.addItem(action("Connect Now", #selector(tapConnect), enabled: connectingSince == nil))
+        }
+
+        menu.addItem(.separator())
+        menu.addItem(toggle("Auto-connect on cable", autoConnect, #selector(tapAuto)))
+        menu.addItem(toggle(Power.isSetUp ? "Work with lid closed" : "Work with lid closed…", lidClosed && Power.isSetUp, #selector(tapLid)))
+        menu.addItem(toggle("iPad as main display", makeMain, #selector(tapMain)))
+        menu.addItem(toggle("Open at login", SMAppService.mainApp.status == .enabled, #selector(tapLogin)))
+
+        menu.addItem(.separator())
+        menu.addItem(action("Quit Tether", #selector(NSApplication.terminate(_:)), key: "q"))
+    }
+
+    private func label(_ title: String) -> NSMenuItem {
+        let i = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        i.isEnabled = false
+        return i
+    }
+
+    private func action(_ title: String, _ sel: Selector, enabled: Bool = true, key: String = "") -> NSMenuItem {
+        let i = NSMenuItem(title: title, action: sel, keyEquivalent: key)
+        i.target = sel == #selector(NSApplication.terminate(_:)) ? NSApp : self
+        i.isEnabled = enabled
+        return i
+    }
+
+    private func toggle(_ title: String, _ on: Bool, _ sel: Selector) -> NSMenuItem {
+        let i = action(title, sel)
+        i.state = on ? .on : .off
+        return i
+    }
+
+    @objc private func tapConnect() { userDisconnected = false; connect() }
+    @objc private func tapDisconnect() { disconnect() }
+    @objc private func tapAuto() { autoConnect.toggle(); evaluate() }
+    @objc private func tapMain() { makeMain.toggle(); if makeMain { wantMain = true; placeMenuBarOnPad() } }
+
+    @objc private func tapLid() {
+        if !Power.isSetUp {
+            NSApp.activate(ignoringOtherApps: true)
+            guard Power.install() else { return }
+            lidClosed = true
+        } else {
+            lidClosed.toggle()
+        }
+        evaluate()
+    }
+
+    @objc private func tapLogin() {
+        let s = SMAppService.mainApp
+        if s.status == .enabled { try? s.unregister() } else { try? s.register() }
+    }
+}
