@@ -19,7 +19,7 @@
 <p align="center">
   <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-14212a?style=flat-square">
   <img alt="Apple silicon and Intel" src="https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-universal-14212a?style=flat-square">
-  <img alt="Swift" src="https://img.shields.io/badge/Swift-600%20lines-5ad6a0?style=flat-square">
+  <img alt="Swift" src="https://img.shields.io/badge/Swift-800%20lines-5ad6a0?style=flat-square">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-5ad6a0?style=flat-square">
 </p>
 
@@ -121,6 +121,7 @@ cd tether
 - [`Sources/USBWatcher.swift`](Sources/USBWatcher.swift): IOKit notifications for an iPad on USB.
 - [`Sources/System.swift`](Sources/System.swift): the lid-closed switch (`pmset`) and moving the main display.
 - [`Sources/PadPointer.swift`](Sources/PadPointer.swift): draws the Mac's pointer on the iPad, which Sidecar hides.
+- [`Sources/Remote.swift`](Sources/Remote.swift), [`Sources/Private.h`](Sources/Private.h): an experimental Remote mode (a virtual Retina display for Screen Sharing). Hidden: hold ⌥ while opening the menu.
 - [`Sources/Log.swift`](Sources/Log.swift): the log at `~/Library/Logs/Tether.log`.
 - [`docs/`](docs): the website, served by GitHub Pages.
 - [`scripts/`](scripts): `build.sh` and `make-icon.swift`.

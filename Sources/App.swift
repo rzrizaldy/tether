@@ -254,7 +254,10 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggle(Power.isSetUp ? "Work with lid closed" : "Work with lid closed…", lidClosed && Power.isSetUp, #selector(tapLid)))
         menu.addItem(toggle("iPad as main display", makeMain, #selector(tapMain)))
         menu.addItem(toggle("Show pointer on iPad", bigCursor, #selector(tapCursor)))
-        menu.addItem(toggle("Remote mode", remote, #selector(tapRemote)))
+        // Remote mode is experimental: shown only with ⌥ held, or once it's on.
+        if remote || NSEvent.modifierFlags.contains(.option) {
+            menu.addItem(toggle("Remote mode (experimental)", remote, #selector(tapRemote)))
+        }
         menu.addItem(toggle("Open at login", SMAppService.mainApp.status == .enabled, #selector(tapLogin)))
 
         menu.addItem(.separator())
