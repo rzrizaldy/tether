@@ -30,8 +30,10 @@ final class USBWatcher {
     }
 
     private static func appleUSB() -> CFDictionary {
+        // A bare "idVendor" key matches nothing for IOUSBHostDevice; it has to
+        // sit under IOPropertyMatch.
         let match = IOServiceMatching("IOUSBHostDevice") as NSMutableDictionary
-        match["idVendor"] = 0x05AC
+        match[kIOPropertyMatchKey] = ["idVendor": 0x05AC]
         return match
     }
 
@@ -42,21 +44,29 @@ final class USBWatcher {
             var id: UInt64 = 0
             IORegistryEntryGetRegistryEntryID(service, &id)
             if plugged {
-                if Self.isPad(service), pads.insert(id).inserted { changed = true }
+                let name = Self.name(service)
+                let pid = (IORegistryEntryCreateCFProperty(service, "idProduct" as CFString, kCFAllocatorDefault, 0)?
+                    .takeRetainedValue() as? Int) ?? 0
+                let pad = name.localizedCaseInsensitiveContains("iPad")
+                Log.write("USB in: \"\(name)\" product=0x\(String(pid, radix: 16)) \(pad ? "→ iPad" : "(not an iPad)")")
+                if pad, pads.insert(id).inserted { changed = true }
             } else if pads.remove(id) != nil {
+                Log.write("USB out: iPad")
                 changed = true
             }
         }
         if changed { onChange?() }
     }
 
-    private static func isPad(_ service: io_service_t) -> Bool {
-        for key in ["USB Product Name", "kUSBProductString"] {
+    private static func name(_ service: io_service_t) -> String {
+        for key in ["USB Product Name", "kUSBProductString", "Product Name"] {
             if let name = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?
-                .takeRetainedValue() as? String, name.localizedCaseInsensitiveContains("iPad") {
-                return true
+                .takeRetainedValue() as? String {
+                return name
             }
         }
-        return false
+        var buf = [CChar](repeating: 0, count: 128)
+        IORegistryEntryGetName(service, &buf)
+        return String(cString: buf)
     }
 }

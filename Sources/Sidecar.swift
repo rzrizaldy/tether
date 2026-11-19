@@ -27,8 +27,31 @@ final class Sidecar {
         return model.isEmpty || model.hasPrefix("iPad")
     }
 
-    func connect(_ device: NSObject, done: @escaping (Error?) -> Void) {
-        call("connectToDevice:completion:", device, done)
+    /// `wired: true` forces the USB cable (transport 2), the same trick
+    /// SidecarLauncher's `-wired` uses. Plain connect lets Sidecar pick, and it
+    /// often picks wireless or nothing at all.
+    func connect(_ device: NSObject, wired: Bool, done: @escaping (Error?) -> Void) {
+        guard wired else { return call("connectToDevice:completion:", device, done) }
+        let sel = Selector(("connectToDevice:withConfig:completion:"))
+        guard let m = manager, m.responds(to: sel),
+              let configClass = NSClassFromString("SidecarDisplayConfig") as? NSObject.Type else {
+            return call("connectToDevice:completion:", device, done)
+        }
+        let config = configClass.init()
+        let setTransport = Selector(("setTransport:"))
+        if config.responds(to: setTransport) {
+            typealias SetFn = @convention(c) (AnyObject, Selector, Int) -> Void
+            unsafeBitCast(config.method(for: setTransport), to: SetFn.self)(config, setTransport, 2)
+        }
+        typealias Fn = @convention(c) (AnyObject, Selector, AnyObject, AnyObject, @escaping @convention(block) (NSError?) -> Void) -> Void
+        unsafeBitCast(m.method(for: sel), to: Fn.self)(m, sel, device, config) { error in
+            DispatchQueue.main.async { done(error) }
+        }
+    }
+
+    static func describe(_ device: NSObject) -> String {
+        let model = (device.value(forKey: "model") as? String) ?? "?"
+        return "\(name(device)) [\(model)]"
     }
 
     func disconnect(_ device: NSObject, done: @escaping (Error?) -> Void) {

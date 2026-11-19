@@ -38,7 +38,7 @@ Tether fixes both. Plug in the cable, and the iPad is your screen. Close the lid
 
 | | |
 |---|---|
-| **The cable is the switch** | Tether watches USB. When an iPad shows up, it turns on Sidecar. If the iPad is locked, it keeps trying until you unlock it. |
+| **The cable is the switch** | Tether watches USB. When an iPad shows up, it turns on Sidecar and forces it over the cable. If the iPad is locked, it keeps trying until you unlock it. |
 | **The menu bar moves** | The iPad becomes the main display, so the Dock and new windows open there, not on the broken screen. |
 | **Close the lid** | A Mac sleeps when you close the lid unless a monitor is plugged in, and macOS doesn't count an iPad as one. Tether keeps the Mac awake while the cable is in. |
 | **Unplug, and it's a normal Mac** | Sleep comes back when you unplug, when you quit, and on the next launch if Tether ever crashes. It won't overheat in your bag. |
@@ -78,6 +78,8 @@ Quit Tether        ⌘Q
 
 - **After a restart you'll be unlocking blind.** Sidecar can't show the Mac's login screen. Open the lid and use Touch ID, or type your password without seeing it.
 - **Sidecar over the cable** also charges the iPad from the Mac.
+- **If it doesn't connect**, choose **Open Log** in the menu. Every plug-in and connect attempt is written to `~/Library/Logs/Tether.log`, with the error. Paste it into an issue.
+- **Plugging in just to charge?** Untick **Auto-connect on cable** at home, or the iPad becomes your screen every time.
 - **Tether uses Sidecar's private framework**, the same one Control Center uses. Apple doesn't publish an API for it, so a future macOS update could break it. If that happens, [open an issue](https://github.com/rzrizaldy/tether/issues).
 
 ## The password, exactly
@@ -116,6 +118,7 @@ cd tether
 - [`Sources/Sidecar.swift`](Sources/Sidecar.swift): connects and disconnects through `SidecarCore`.
 - [`Sources/USBWatcher.swift`](Sources/USBWatcher.swift): IOKit notifications for an iPad on USB.
 - [`Sources/System.swift`](Sources/System.swift): the lid-closed switch (`pmset`) and moving the main display.
+- [`Sources/Log.swift`](Sources/Log.swift): the log at `~/Library/Logs/Tether.log`.
 - [`docs/`](docs): the website, served by GitHub Pages.
 - [`scripts/`](scripts): `build.sh` and `make-icon.swift`.
 

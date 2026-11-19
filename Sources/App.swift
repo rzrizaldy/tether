@@ -23,6 +23,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var userDisconnected = false
     private var wantMain = false
     private var lastError: String?
+    private var attempt = 0
 
     private var autoConnect: Bool { get { defaults.bool(forKey: "autoConnect") } set { defaults.set(newValue, forKey: "autoConnect") } }
     private var lidClosed: Bool { get { defaults.bool(forKey: "lidClosed") } set { defaults.set(newValue, forKey: "lidClosed") } }
@@ -36,6 +37,8 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         defaults.register(defaults: ["autoConnect": true, "lidClosed": true, "makeMain": true])
 
         if awakeHeld { Power.keepAwakeWithLidClosed(false); awakeHeld = false }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        Log.write("Tether \(version) started on macOS \(ProcessInfo.processInfo.operatingSystemVersionString). Sidecar \(sidecar.isAvailable ? "found" : "MISSING"), lid-closed \(Power.isSetUp ? "set up" : "not set up")")
 
         if !defaults.bool(forKey: "didSetUpLogin") {
             try? SMAppService.mainApp.register()
@@ -79,8 +82,10 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Cable in + iPad has been the screen → survive the lid closing.
         let wantAwake = lidClosed && plugged && sawSidecarThisPlug && !userDisconnected
-        if wantAwake != awakeHeld, Power.keepAwakeWithLidClosed(wantAwake) || !Power.isSetUp {
-            awakeHeld = wantAwake && Power.isSetUp
+        if wantAwake != awakeHeld {
+            let ok = Power.keepAwakeWithLidClosed(wantAwake)
+            Log.write("Lid-closed awake → \(wantAwake ? "on" : "off") \(ok ? "" : Power.isSetUp ? "(pmset failed)" : "(not set up yet)")")
+            if ok || !Power.isSetUp { awakeHeld = wantAwake && Power.isSetUp }
         }
 
         if let since = connectingSince, Date().timeIntervalSince(since) > 30 { connectingSince = nil }
@@ -92,16 +97,27 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func connect() {
         guard let device = sidecar.devices.first else {
-            lastError = sidecar.isAvailable ? "iPad not found — unlock it and check Apple ID" : "Sidecar unavailable on this Mac"
+            let why = sidecar.isAvailable ? "iPad not found — unlock it and check Apple ID" : "Sidecar unavailable on this Mac"
+            if lastError != why { Log.write("Can't connect: \(why)") }
+            lastError = why
             return
         }
+        // With the cable in, force the wired link first; every other try,
+        // let Sidecar choose, in case this macOS rejects the wired config.
+        attempt += 1
+        let wired = usb.iPadPlugged && attempt % 2 == 1
         connectingSince = Date()
         refreshIcon()
-        sidecar.connect(device) { [weak self] error in
+        Log.write("Connect #\(attempt) to \(Sidecar.describe(device)) \(wired ? "over the cable" : "(Sidecar picks the link)")")
+        sidecar.connect(device, wired: wired) { [weak self] error in
             guard let self else { return }
             self.connectingSince = nil
             self.lastError = error?.localizedDescription
-            if error == nil {
+            if let e = error as NSError? {
+                Log.write("  failed: \(e.domain) \(e.code) — \(e.localizedDescription)")
+            } else {
+                Log.write("  connected. Sidecar reports \(self.sidecar.connected.count) connected device(s)")
+                self.attempt = 0
                 self.wantMain = true
                 self.placeMenuBarOnPad()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.placeMenuBarOnPad() }
@@ -161,6 +177,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggle("Open at login", SMAppService.mainApp.status == .enabled, #selector(tapLogin)))
 
         menu.addItem(.separator())
+        menu.addItem(action("Open Log", #selector(tapLog)))
         menu.addItem(action("Quit Tether", #selector(NSApplication.terminate(_:)), key: "q"))
     }
 
@@ -183,6 +200,7 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return i
     }
 
+    @objc private func tapLog() { NSWorkspace.shared.open(Log.url) }
     @objc private func tapConnect() { userDisconnected = false; connect() }
     @objc private func tapDisconnect() { disconnect() }
     @objc private func tapAuto() { autoConnect.toggle(); evaluate() }
