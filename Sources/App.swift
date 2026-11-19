@@ -35,6 +35,11 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var autoConnect: Bool { get { defaults.bool(forKey: "autoConnect") } set { defaults.set(newValue, forKey: "autoConnect") } }
     private var lidClosed: Bool { get { defaults.bool(forKey: "lidClosed") } set { defaults.set(newValue, forKey: "lidClosed") } }
     private var makeMain: Bool { get { defaults.bool(forKey: "makeMain") } set { defaults.set(newValue, forKey: "makeMain") } }
+    /// Sill (getsill.app) carries the picture when there's no cable: over Wi-Fi
+    /// at home, or through Tailscale from away. Sidecar stays the cable's.
+    private static let sillID = "me.saffer.sill.mac"
+    private var sillInstalled: Bool { NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.sillID) != nil }
+    private var sillOpened = false
     private var remote: Bool { get { defaults.bool(forKey: "remote") } set { defaults.set(newValue, forKey: "remote") } }
     private var bigCursor: Bool { get { defaults.bool(forKey: "bigCursor") } set { defaults.set(newValue, forKey: "bigCursor") } }
     /// Set by 1.2 builds that enlarged the pointer; put back on launch.
@@ -119,6 +124,9 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Remote mode: a virtual Retina screen for Screen Sharing, unless the
         // iPad is right here on Sidecar, in which case that is the screen.
         let wantScreen = remote && !connected
+        // Remote with Sill: no Sidecar, so make sure Sill is there to stream.
+        if wantScreen && sillInstalled && !sillOpened { openSill(); sillOpened = true }
+        if !wantScreen { sillOpened = false }
         if wantScreen && !screen.isOn {
             screen.show()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.placeMenuBarOnVirtual() }
@@ -229,17 +237,19 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(label(status))
         if awakeHeld { menu.addItem(label("Lid can be closed")) }
         if remote {
-            let sharing = Remote.screenSharingOn
             let name = Remote.tailscaleName()
-            menu.addItem(label(connected != nil ? "Remote: paused while iPad is plugged in" : Remote.onCharger ? "Remote: ready" : "Remote: plug in the charger to stay awake"))
-            if !sharing { menu.addItem(action("Turn On Screen Sharing…", #selector(tapSharing))) }
-            if let name {
-                let i = action("Copy vnc://\(name)", #selector(tapCopyAddress))
-                i.representedObject = "vnc://\(name)"
-                menu.addItem(i)
+            menu.addItem(label(connected != nil ? "Remote: paused, the cable is on Sidecar" : Remote.onCharger ? (sillInstalled ? "Remote: ready in Sill" : "Remote: ready") : "Remote: plug in the charger to stay awake"))
+            if sillInstalled {
+                menu.addItem(action("Open Sill", #selector(tapOpenSill)))
             } else {
-                menu.addItem(action("Set Up Tailscale…", #selector(tapTailscale)))
+                if !Remote.screenSharingOn { menu.addItem(action("Turn On Screen Sharing…", #selector(tapSharing))) }
+                if let name {
+                    let i = action("Copy vnc://\(name)", #selector(tapCopyAddress))
+                    i.representedObject = "vnc://\(name)"
+                    menu.addItem(i)
+                }
             }
+            if name == nil { menu.addItem(action("Set Up Tailscale…", #selector(tapTailscale))) }
         }
 
         menu.addItem(.separator())
@@ -254,8 +264,11 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggle(Power.isSetUp ? "Work with lid closed" : "Work with lid closed…", lidClosed && Power.isSetUp, #selector(tapLid)))
         menu.addItem(toggle("iPad as main display", makeMain, #selector(tapMain)))
         menu.addItem(toggle("Show pointer on iPad", bigCursor, #selector(tapCursor)))
-        // Remote mode is experimental: shown only with ⌥ held, or once it's on.
-        if remote || NSEvent.modifierFlags.contains(.option) {
+        // With Sill installed, remote is a plain option. Without it (Screen
+        // Sharing and a VNC app) it's experimental: shown with ⌥ held, or once on.
+        if sillInstalled {
+            menu.addItem(toggle("Remote and wireless with Sill", remote, #selector(tapRemote)))
+        } else if remote || NSEvent.modifierFlags.contains(.option) {
             menu.addItem(toggle("Remote mode (experimental)", remote, #selector(tapRemote)))
         }
         menu.addItem(toggle("Open at login", SMAppService.mainApp.status == .enabled, #selector(tapLogin)))
@@ -287,6 +300,19 @@ final class Tether: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func tapLog() { NSWorkspace.shared.open(Log.url) }
     @objc private func tapConnect() { userDisconnected = false; drops = 0; nextConnect = .distantPast; connect() }
     @objc private func tapDisconnect() { disconnect() }
+    @objc private func tapOpenSill() {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.sillID) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func openSill() {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.sillID) else { return }
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = false
+        NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in }
+        Log.write("Opened Sill")
+    }
+
     @objc private func tapRemote() { remote.toggle(); Log.write("Remote mode \(remote ? "on" : "off")"); evaluate() }
     @objc private func tapSharing() { Remote.openSharingSettings() }
     @objc private func tapTailscale() {
